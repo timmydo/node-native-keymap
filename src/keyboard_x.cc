@@ -7,15 +7,11 @@
 #include "string_conversion.h"
 #include "common.h"
 
-#include <X11/XKBlib.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/extensions/XKBrules.h>
+#include <xkbcommon/xkbcommon-keysyms.h>
+#include <xkbcommon/xkbcommon.h>
 
 #include "../deps/chromium/macros.h"
 #include "../deps/chromium/x/keysym_to_unicode.h"
-
-typedef struct _XDisplay XDisplay;
 
 namespace {
 
@@ -26,17 +22,21 @@ class KeyModifierMaskToXModifierMask {
     return instance;
   }
 
-  void Initialize(Display* display) {
+  void Initialize() {
     alt_modifier = 0;
     meta_modifier = 0;
     num_lock_modifier = 0;
     mode_switch_modifier = 0;
 
-    if (!display) {
-      return;
-    }
-
-    XModifierKeymap* mod_map = XGetModifierMapping(display);
+    const char *keymap_str = "help";
+    struct xkb_context *context = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    struct xkb_keymap *keymap = xkb_keymap_new_from_string(
+	context, keymap_str, XKB_KEYMAP_FORMAT_TEXT_V1,
+	XKB_KEYMAP_COMPILE_NO_FLAGS);
+    struct xkb_state *state = xkb_state_new(keymap);
+    
+    
+    /*XModifierKeymap* mod_map = XGetModifierMapping(display);*/
     int max_mod_keys = mod_map->max_keypermod;
     for (int mod_index = 0; mod_index <= 8; ++mod_index) {
       for (int key_index = 0; key_index < max_mod_keys; ++key_index) {
@@ -45,23 +45,23 @@ class KeyModifierMaskToXModifierMask {
           continue;
         }
 
-        int keysym = XkbKeycodeToKeysym(display, key, 0, 0);
+        int keysym = xkb_state_key_get_one_sym(xkb_state, key);
         if (!keysym) {
           continue;
         }
 
         // TODO: Also check for XK_ISO_Level3_Shift	0xFE03
 
-        if (keysym == XK_Alt_L || keysym == XK_Alt_R) {
+        if (keysym == XKB_KEY_Alt_L || keysym == XKB_KEY_Alt_R) {
           alt_modifier = 1 << mod_index;
         }
-        if (keysym == XK_Mode_switch) {
+        if (keysym == XKB_KEY_Mode_switch) {
           mode_switch_modifier = 1 << mod_index;
         }
-        if (keysym == XK_Meta_L || keysym == XK_Super_L || keysym == XK_Meta_R || keysym == XK_Super_R) {
+        if (keysym == XKB_KEY_Meta_L || keysym == XKB_KEY_Super_L || keysym == XKB_KEY_Meta_R || keysym == XKB_KEY_Super_R) {
           meta_modifier = 1 << mod_index;
         }
-        if (keysym == XK_Num_Lock) {
+        if (keysym == XKB_KEY_Num_Lock) {
           num_lock_modifier = 1 << mod_index;
         }
       }
@@ -99,7 +99,7 @@ class KeyModifierMaskToXModifierMask {
 
  private:
   KeyModifierMaskToXModifierMask() {
-    Initialize(NULL);
+    Initialize();
   }
 
   int alt_modifier;
@@ -145,14 +145,8 @@ napi_value _GetKeyMap(napi_env env, napi_callback_info info) {
     return result;
   }
 
-  XEvent event;
-  memset(&event, 0, sizeof(XEvent));
-  XKeyEvent* key_event = &event.xkey;
-  key_event->display = display;
-  key_event->type = KeyPress;
-
   KeyModifierMaskToXModifierMask *mask_provider = &KeyModifierMaskToXModifierMask::GetInstance();
-  mask_provider->Initialize(display);
+  mask_provider->Initialize();
 
   size_t cnt = sizeof(usb_keycode_map) / sizeof(usb_keycode_map[0]);
 
@@ -194,9 +188,6 @@ napi_value _GetKeyMap(napi_env env, napi_callback_info info) {
 
     NAPI_CALL(env, napi_set_named_property(env, result, code, entry));
   }
-
-  XFlush(display);
-  XCloseDisplay(display);
 
   return result;
 }

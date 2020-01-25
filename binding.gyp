@@ -13,10 +13,10 @@
             "src/keyboard_x.cc"
           ],
           "include_dirs": [
-            "<!@(${PKG_CONFIG:-pkg-config} x11 xkbfile --cflags | sed s/-I//g)"
+            "<!@(${PKG_CONFIG:-pkg-config} xkbcommon --cflags | sed s/-I//g)"
           ],
           "libraries": [
-            "<!@(${PKG_CONFIG:-pkg-config} x11 xkbfile --libs)"
+            "<!@(${PKG_CONFIG:-pkg-config} xkbcommon --libs)"
           ]
         }],
         ['OS=="freebsd"', {
@@ -29,8 +29,7 @@
           ],
           "link_settings": {
             "libraries": [
-              "-lX11",
-              "-lxkbfile",
+              "-lxkbcommon",
               "-L/usr/local/lib"
             ]
           }
